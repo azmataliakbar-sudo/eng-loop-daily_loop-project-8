@@ -6,7 +6,7 @@ const draftFile = 'draft.txt';
 
 let lastCommit = '';
 const content = fs.readFileSync(progressFile, 'utf8');
-const m = content.match(/last_commit:\s*(\S*)/);
+const m = content.match(/last_commit:\s*([0-9a-f]*)/);
 if (m) lastCommit = m[1];
 
 let log = [];

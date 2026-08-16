@@ -4,26 +4,18 @@ param(
 )
 
 $root = "C:\Projects\eng_loop\daily_loop"
-$progressFile = Join-Path $root "progress.md"
-$changelogFile = Join-Path $root "CHANGELOG.md"
 $doneFile = Join-Path $root "task-done.txt"
-
-$startedAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-
-$content = Get-Content $progressFile -Raw
-
-# Spine: last_commit
-$lastCommit = ""
-if ($content -match 'last_commit:\s*(\S*)') {
-    $lastCommit = $Matches[1]
-}
+$startedAt = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
 
 # Worktree isolation
 $wtPath = Join-Path $root "wt-$stamp"
 $null = git worktree add $wtPath HEAD 2>&1
 
-$draftOk = $false
+$wtProgress = Join-Path $wtPath "progress.md"
+$wtChangelog = Join-Path $wtPath "CHANGELOG.md"
+$wtDraft = Join-Path $wtPath "draft.txt"
+
 $verdict = "FAIL"
 $reason = "worktree not created"
 $newCount = 0
@@ -31,14 +23,10 @@ $newCount = 0
 if (Test-Path $wtPath) {
     Push-Location $wtPath
     try {
-        # Write spine state into the worktree so maker reads correctly.
-        Set-Content -Path $progressFile -Value $content
-
         node maker.js
 
-        $draft = Get-Content "draft.txt" -Raw
         if ($Mode -eq "sabotage") {
-            Set-Content -Path "draft.txt" -Value "INVALID LINE WITHOUT HASH"
+            Set-Content -Path $wtDraft -Value "INVALID LINE WITHOUT HASH"
         }
 
         $reviewOutput = node reviewer.js 2>&1
@@ -48,18 +36,22 @@ if (Test-Path $wtPath) {
             $verdict = "PASS"
             $reason = "reviewer PASS"
 
-            $draftLines = Get-Content "draft.txt"
-            if ($draftLines -notcontains "NO_NEW_COMMITS") {
-                Add-Content -Path $changelogFile -Value $draftLines
+            $draftLines = Get-Content $wtDraft -ErrorAction SilentlyContinue
+            if ($draftLines -and ($draftLines -notcontains "NO_NEW_COMMITS")) {
+                Add-Content -Path $wtChangelog -Value $draftLines
                 $newCount = @($draftLines | Where-Object { $_ -match '^- ' }).Count
             }
 
-            # Update spine with newest commit hash
             $headHash = (git rev-parse HEAD).Trim()
-            $newProgress = $content -replace 'last_commit:\s*\S*', "last_commit: $headHash"
-            Set-Content -Path $progressFile -Value $newProgress
+            $progressContent = Get-Content $wtProgress -Raw
+            $newProgress = $progressContent -replace '(?m)^last_commit:.*$', "last_commit: $headHash"
+            Set-Content -Path $wtProgress -Value $newProgress
+
+            Copy-Item $wtProgress (Join-Path $root "progress.md") -Force
+            Copy-Item $wtChangelog (Join-Path $root "CHANGELOG.md") -Force
         } else {
             $reason = ($reviewOutput | Where-Object { $_ -match '^Reason' } | Select-Object -First 1)
+            if (-not $reason) { $reason = ($reviewOutput -join " ") }
         }
     } finally {
         Pop-Location
