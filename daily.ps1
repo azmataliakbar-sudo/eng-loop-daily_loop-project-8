@@ -23,6 +23,9 @@ $newCount = 0
 if (Test-Path $wtPath) {
     Push-Location $wtPath
     try {
+        Copy-Item (Join-Path $root "progress.md") $wtProgress -Force
+        Copy-Item (Join-Path $root "CHANGELOG.md") $wtChangelog -Force
+
         node maker.js
 
         if ($Mode -eq "sabotage") {
