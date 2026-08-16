@@ -10,13 +10,12 @@ const m = content.match(/last_commit:\s*([0-9a-f]*)/);
 if (m) lastCommit = m[1];
 
 let log = [];
-if (lastCommit) {
-  try {
-    log = execSync(`git log ${lastCommit}..HEAD --pretty=format:"%h|%s"`, { encoding: 'utf8' })
-      .trim().split(/\r?\n/).filter(Boolean);
-  } catch {
-    log = [];
-  }
+try {
+  const range = lastCommit ? `${lastCommit}..HEAD` : 'HEAD';
+  log = execSync(`git log ${range} --pretty=format:"%h|%s"`, { encoding: 'utf8' })
+    .trim().split(/\r?\n/).filter(Boolean);
+} catch {
+  log = [];
 }
 
 if (log.length === 0) {
